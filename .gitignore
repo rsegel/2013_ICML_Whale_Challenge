@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+wandb/
+*.npy
+*.parquet
+*.pt
+*.onnx
+.env
+reports/listen/
