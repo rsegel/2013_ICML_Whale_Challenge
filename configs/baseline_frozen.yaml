@@ -1,0 +1,20 @@
+# ResNet-18 with frozen ImageNet features and a trained linear layer.
+# The like-for-like counterpart of the Perch probe: same "frozen features +
+# linear classifier" recipe, different pretraining.
+name: resnet18_frozen
+model:
+  pretrained: true
+  freeze_backbone: true
+  augment: false
+data:
+  max_shift: 0
+  batch_size: 64
+  train_fraction: 1.0
+optim:
+  lr: 1.0e-2
+  weight_decay: 1.0e-4
+  warmup_epochs: 1
+  epochs: 15
+  patience: 3
+seed: 0
+threads: 12

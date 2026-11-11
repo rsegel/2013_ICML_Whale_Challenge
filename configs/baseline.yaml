@@ -1,0 +1,18 @@
+# ResNet-18 on spectrograms, fully fine-tuned.
+name: resnet18_finetune
+model:
+  pretrained: true
+  freeze_backbone: false
+  augment: true        # SpecAugment: one frequency band (<= 31 Hz) and one time band (<= 0.2 s)
+data:
+  max_shift: 500       # random time shift of up to +-0.25 s (500 samples at 2 kHz)
+  batch_size: 64
+  train_fraction: 1.0  # < 1 for the label-efficiency curve
+optim:
+  lr: 1.0e-3
+  weight_decay: 1.0e-2
+  warmup_epochs: 1
+  epochs: 15
+  patience: 3          # epochs without a better validation average precision
+seed: 0
+threads: 12
