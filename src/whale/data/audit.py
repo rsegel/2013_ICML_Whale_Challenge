@@ -1,5 +1,15 @@
 """Data audit: print the facts later design choices rest on and save figures.
 
+Two parts, kept apart so that exploration cannot leak held-out data:
+
+1. **Integrity checks on every clip, without labels**: file format, clip
+   lengths, spacing in time, signal level, exact duplicates. These validate the
+   pipeline's input and never read a label.
+2. **Exploration with labels, on the design fold's training days only**
+   (28 and 29 March): class balance, positive rate by hour, example and mean
+   spectrograms per class, listening clips. Anything that looks at labels is
+   part of model development, so it must not see validation or test days.
+
 Reads the decoded cache (run ``python -m whale.data.decode`` first).
 
 Usage::
@@ -20,6 +30,7 @@ from scipy import signal
 
 from whale import paths
 from whale.data.preprocess import centre_pad
+from whale.data.splits import DESIGN_FOLD, FOLDS, assign_splits
 
 FIGURE_DIR = paths.REPO_ROOT / "reports" / "figures"
 LISTEN_DIR = paths.REPO_ROOT / "reports" / "listen"
@@ -50,14 +61,14 @@ def format_and_length(name: str, manifest: pd.DataFrame) -> None:
 
 
 def class_balance(manifest: pd.DataFrame) -> None:
-    section("train: class balance by day")
+    section("training days: class balance by day")
     table = manifest.groupby("date")["label"].agg(clips="size", positives="sum")
     table["pct_positive"] = (100 * table["positives"] / table["clips"]).round(1)
     table["chunks"] = manifest.groupby("date")["chunk_id"].nunique()
     print(table)
     print("overall pct positive:", round(100 * manifest["label"].mean(), 2))
 
-    section("train: short clips by label")
+    section("training days: short clips by label")
     short = manifest["n_samples"] < paths.CLIP_SAMPLES
     print(pd.crosstab(short.rename("short"), manifest["label"]))
     print("pct positive among short clips:", round(100 * manifest.loc[short, "label"].mean(), 1))
@@ -101,21 +112,15 @@ def amplitude(name: str, manifest: pd.DataFrame, waveforms: np.ndarray) -> None:
     head = data[:, :500]
     by_day = pd.DataFrame({"dc_offset": head.mean(axis=1), "std_after_dc_removal": head.std(axis=1)})
     print("median per day:\n", by_day.groupby(manifest["date"].values).median().round(0))
-    if (manifest["label"] >= 0).all():
-        for label in (0, 1):
-            print(f"  median RMS label {label}:", round(float(np.median(rms[manifest['label'] == label])), 0))
 
 
-def duplicates(train_wave: np.ndarray, test_wave: np.ndarray, train: pd.DataFrame) -> None:
+def duplicates(train_wave: np.ndarray, test_wave: np.ndarray) -> None:
     section("exact duplicate waveforms")
     digest = lambda row: hashlib.md5(np.ascontiguousarray(row).tobytes()).hexdigest()
     train_hash = pd.Series([digest(r) for r in train_wave])
     test_hash = pd.Series([digest(r) for r in test_wave])
     dup = train_hash.duplicated(keep=False)
     print("train clips sharing a waveform with another train clip:", int(dup.sum()))
-    if dup.any():
-        labels = train.loc[dup.values].assign(h=train_hash[dup].values).groupby("h")["label"].nunique()
-        print("  duplicate groups with conflicting labels:", int((labels > 1).sum()))
     print("test clips duplicated inside test:", int(test_hash.duplicated(keep=False).sum()))
     print("test clips identical to a train clip:", int(test_hash.isin(set(train_hash)).sum()))
 
@@ -141,7 +146,7 @@ def figure_examples(manifest: pd.DataFrame, waveforms: np.ndarray, seed: int = 0
             ax.set_title(manifest.at[row, "filename"].removesuffix(".aif"), fontsize=7)
         fig.supxlabel("time (s)")
         fig.supylabel("frequency (Hz)")
-        fig.suptitle(f"20 random {name} training clips (0-500 Hz, per-panel colour scale)")
+        fig.suptitle(f"20 random {name} clips from the training days (0-500 Hz, per-panel colour scale)")
         fig.tight_layout()
         fig.savefig(FIGURE_DIR / f"examples_{name}.png", dpi=110)
         plt.close(fig)
@@ -155,7 +160,8 @@ def figure_mean_spectrogram(manifest: pd.DataFrame, waveforms: np.ndarray) -> No
     fig, axes = plt.subplots(1, 3, figsize=(15, 4), sharey=True)
     means = {}
     for label in (0, 1):
-        rows = rng.choice(full[manifest.loc[full, "label"] == label], size=2000, replace=False)
+        candidates = full[manifest.loc[full, "label"] == label]
+        rows = rng.choice(candidates, size=min(2000, len(candidates)), replace=False)
         stack = [spectrogram(waveforms[r])[2] for r in rows]
         freqs, times, _ = spectrogram(waveforms[rows[0]])
         means[label] = np.mean(stack, axis=0)
@@ -229,20 +235,26 @@ def main() -> None:
     train, train_wave = load("train")
     test, test_wave = load("test")
 
-    format_and_length("train", train)
-    format_and_length("test", test)
-    class_balance(train)
-    temporal_structure("train", train)
-    temporal_structure("test", test)
-    amplitude("train", train, train_wave)
-    amplitude("test", test, test_wave)
-    duplicates(train_wave, test_wave, train)
+    print("##### Part 1: integrity checks on all clips, no labels read #####")
+    unlabelled = train.drop(columns="label")  # make it impossible to read a label here
+    format_and_length("labelled days", unlabelled)
+    format_and_length("Kaggle days", test)
+    temporal_structure("labelled days", unlabelled)
+    temporal_structure("Kaggle days", test)
+    amplitude("labelled days", unlabelled, train_wave)
+    amplitude("Kaggle days", test, test_wave)
+    duplicates(train_wave, test_wave)
+    figure_lengths(unlabelled)
 
-    figure_examples(train, train_wave)
-    figure_mean_spectrogram(train, train_wave)
-    figure_rate_by_hour(train)
-    figure_lengths(train)
-    export_listening_clips(train, train_wave)
+    days = FOLDS[DESIGN_FOLD]["train"]
+    print(f"\n##### Part 2: exploration with labels, training days only ({', '.join(days)}) #####")
+    explore = train[assign_splits(train, DESIGN_FOLD) == "train"]  # keeps the row index into the waveforms
+    assert set(explore["date"]) == set(days)
+    class_balance(explore)
+    figure_examples(explore, train_wave)
+    figure_mean_spectrogram(explore, train_wave)
+    figure_rate_by_hour(explore)
+    export_listening_clips(explore, train_wave)
     print(f"\nfigures -> {FIGURE_DIR}\nlistening clips -> {LISTEN_DIR}")
 
 

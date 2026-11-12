@@ -1,9 +1,10 @@
 """Cross-validation folds over the four labelled recording days.
 
 Clips are detector output from continuous recordings: neighbours overlap in
-time, share background noise, and their labels are correlated (a clip that
-follows a positive is positive about 25-33% of the time against an 11% base
-rate). A random split would therefore leak, so whole days are held out. That
+time, share background noise, and their labels are correlated (on the design
+fold's training days, a clip that follows a positive is positive 23-26% of the
+time against an 8-11% base rate). A random split would therefore leak, so whole
+days are held out. That
 also mirrors the real task: Kaggle's unlabelled test set is from later days.
 
 Each fold tests on one day, validates (early stopping, threshold) on the day
