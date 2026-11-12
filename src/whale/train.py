@@ -59,7 +59,7 @@ def predict(model: nn.Module, loader: DataLoader) -> tuple[np.ndarray, np.ndarra
     model.eval()
     rows, labels, logits = [], [], []
     for waveform, label, row in loader:
-        logits.append(model(waveform).numpy())
+        logits.append(model(waveform.to(next(model.parameters()).device)).cpu().numpy())
         labels.append(label.numpy())
         rows.append(row.numpy())
     return np.concatenate(rows), np.concatenate(labels), np.concatenate(logits)
@@ -101,7 +101,9 @@ def run(config: dict, fold: int, limit: int | None = None, resume: bool = True) 
     checkpoint =paths.CACHE_DIR / "checkpoints" / f"{run_name}.pt"  # best model's weights
     resume_file = checkpoint.with_suffix(".resume.pt")  # full state after the last finished epoch
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    state = torch.load(resume_file, weights_only=False) if resume and resume_file.exists() else None
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    state = (torch.load(resume_file, weights_only=False, map_location=device)
+             if resume and resume_file.exists() else None)
     start_epoch = state["epoch"] if state else 0
 
     manifest = load_labelled(fold)
@@ -119,7 +121,7 @@ def run(config: dict, fold: int, limit: int | None = None, resume: bool = True) 
     eval_loaders = {split: DataLoader(ClipDataset(manifest, waveforms, rows[split]), 256)
                     for split in ("val", "test")}
 
-    model = SpectrogramResNet(**config["model"])
+    model = SpectrogramResNet(**config["model"]).to(device)
     trainable = [p for p in model.parameters() if p.requires_grad]
     optim_cfg = config["optim"]
     optimizer = torch.optim.AdamW(trainable, lr=optim_cfg["lr"], weight_decay=optim_cfg["weight_decay"])
@@ -140,7 +142,7 @@ def run(config: dict, fold: int, limit: int | None = None, resume: bool = True) 
 
     wandb.init(project=PROJECT, name=run_name, group=config["name"], job_type="train", mode=wandb_mode(),
                id=state["wandb_id"] if state else None, resume="allow" if state else None,
-               config={**config, "fold": fold, "fold_days": FOLDS[fold],
+               config={**config, "device": str(device), "fold": fold, "fold_days": FOLDS[fold],
                        "n_train": len(rows["train"]), "n_val": len(rows["val"]),
                        "trainable_parameters": sum(p.numel() for p in trainable),
                        "total_parameters": sum(p.numel() for p in model.parameters())})
@@ -152,7 +154,7 @@ def run(config: dict, fold: int, limit: int | None = None, resume: bool = True) 
         model.train()
         running, seen = 0.0, 0
         for waveform, label, _ in train_loader:
-            loss = loss_fn(model(waveform), label)
+            loss = loss_fn(model(waveform.to(device)), label.to(device))
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -185,7 +187,7 @@ def run(config: dict, fold: int, limit: int | None = None, resume: bool = True) 
             "model": model.state_dict(), "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict()})
 
-    model.load_state_dict(torch.load(checkpoint))
+    model.load_state_dict(torch.load(checkpoint, map_location=device))
     frames = []
     for split, loader in eval_loaders.items():
         split_rows, labels, logits = predict(model, loader)

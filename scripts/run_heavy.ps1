@@ -5,8 +5,8 @@ Runs the long CPU training jobs one after another, outside any editor or agent s
     powershell -ExecutionPolicy Bypass -File scripts\run_heavy.ps1 -CvOnly    # only the cross-validation folds
 
 Safe to stop (Ctrl+C) and safe to run again: finished jobs are skipped and an
-interrupted job continues from its last finished epoch. Jobs run at below-normal
-priority, so interactive work on the same machine stays responsive.
+interrupted job continues from its last finished epoch. Jobs use 10 of the CPU
+threads by default (-Threads), which leaves room for interactive work.
 #>
 param(
     [switch]$CvOnly,
@@ -19,7 +19,9 @@ if (-not $env:UV_PROJECT_ENVIRONMENT) { $env:UV_PROJECT_ENVIRONMENT = "$HOME\dv_
 $cache = if ($env:WHALE_CACHE_DIR) { $env:WHALE_CACHE_DIR } else { "$HOME\dv_cache" }
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUNBUFFERED = "1"
-(Get-Process -Id $PID).PriorityClass = "BelowNormal"   # child processes inherit this
+# Priority is left at normal; headroom for other work comes from using fewer
+# threads. If training is far slower than expected, check the machine's power
+# mode before anything else (see the README).
 
 # name = the predictions file the job writes; args = what to pass to whale.train
 $jobs = @(
