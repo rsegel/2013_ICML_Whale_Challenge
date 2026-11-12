@@ -38,6 +38,9 @@ VARIANTS = [
     PerchInputConfig(8, "zero"),
     PerchInputConfig(1, "tile"),
     PerchInputConfig(4, "zero", peak=1.0),
+    # waveform-domain versions of the CNN's per-frequency median subtraction
+    PerchInputConfig(4, "zero", denoise="whiten"),
+    PerchInputConfig(4, "zero", denoise="subtract"),
 ]
 SUBSET = {"train": (1000, 2000), "val": (600, 1400)}  # (positives, negatives)
 C_GRID = (0.001, 0.01, 0.1)

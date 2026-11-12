@@ -18,6 +18,7 @@ Usage::
 
     python -m whale.embed train --speed 4 --pad zero
     python -m whale.embed train --speed 4 --pad zero --spatial --device cuda --batch-size 128
+    python -m whale.embed train --speed 4 --pad zero --denoise whiten --device cuda --batch-size 128
 """
 
 import argparse
@@ -29,7 +30,7 @@ from tqdm import tqdm
 
 from whale import paths
 from whale.data.preprocess import clean_clip
-from whale.features.perch_input import PerchInputConfig, make_perch_input
+from whale.features.perch_input import VALID_DENOISE, PerchInputConfig, make_perch_input
 from whale.models.perch_onnx import EMBEDDING_DIM, SPATIAL_SHAPE, PerchEmbedder
 
 # Time frames 5-10 of 16 (each about 0.31 s): the clip sits in frames 6-9 at
@@ -119,10 +120,11 @@ if __name__ == "__main__":
     parser.add_argument("--speed", type=int, default=1)
     parser.add_argument("--pad", choices=["zero", "tile"], default="zero")
     parser.add_argument("--peak", type=float, default=0.25)
+    parser.add_argument("--denoise", choices=list(VALID_DENOISE), default="none")
     parser.add_argument("--spatial", action="store_true", help="store centre-frame spatial embeddings")
     parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--threads", type=int, default=None, help="ONNX Runtime CPU threads (default: all cores)")
     args = parser.parse_args()
-    config = PerchInputConfig(args.speed, args.pad, args.peak)
+    config = PerchInputConfig(args.speed, args.pad, args.peak, args.denoise)
     print(embed_subset(args.subset, config, spatial=args.spatial, device=args.device, batch_size=args.batch_size, threads=args.threads))

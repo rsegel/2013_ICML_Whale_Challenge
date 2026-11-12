@@ -41,11 +41,16 @@ INPUT = PerchInputConfig(speed=4, pad="zero")  # chosen in select_perch_input
 
 
 def run(fold: int, seed: int = 0, train_fraction: float = 1.0, limit: int | None = None, model: str = "logreg",
-        features_name: str = "pooled"):
+        features_name: str = "pooled", denoise: str = "none"):
     setting, grid, build = MODELS[model]
     NAME = f"perch_{model}" if features_name == "pooled" else f"perch_{model}_{features_name}"
+    input_config = INPUT
+    if denoise != "none":  # waveform version of the CNN's median subtraction; separate model name
+        input_config = PerchInputConfig(INPUT.speed, INPUT.pad, INPUT.peak, denoise)
+        NAME += f"_{denoise}"
     manifest = load_labelled(fold)
-    source = embedding_path("train", INPUT) if features_name == "pooled" else variant_path("train", INPUT, features_name)
+    source = (embedding_path("train", input_config) if features_name == "pooled"
+              else variant_path("train", input_config, features_name))
     embeddings = np.load(source, mmap_mode="r")
     assert len(embeddings) == len(manifest), "embedding file does not match the manifest"
     rows = {split: manifest.index[manifest["split"] == split].to_numpy() for split in ("train", "val", "test")}
@@ -60,7 +65,7 @@ def run(fold: int, seed: int = 0, train_fraction: float = 1.0, limit: int | None
         run_name += f"_frac{train_fraction:g}"
     wandb.init(project=PROJECT, name=run_name, group=NAME, job_type="train", mode=wandb_mode(),
                config={"name": NAME, "fold": fold, "fold_days": FOLDS[fold], "seed": seed,
-                       "input": INPUT.name, "features": features_name, f"{setting}_grid": grid, "train_fraction": train_fraction,
+                       "input": input_config.name, "features": features_name, f"{setting}_grid": grid, "train_fraction": train_fraction,
                        "n_train": len(rows["train"]), "n_val": len(rows["val"]),
                        "trainable_parameters": features["train"].shape[1] + 1 if model == "logreg" else 0})
 
@@ -102,5 +107,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", choices=list(MODELS), default="logreg")
     parser.add_argument("--features", choices=["pooled", *VARIANTS], default="pooled",
                         help="Perch's pooled embedding, or a centre-frame variant from whale.pool_spatial")
+    parser.add_argument("--denoise", choices=["none", "whiten", "subtract"], default="none",
+                        help="use embeddings of the denoised Perch input (whale.embed --denoise)")
     args = parser.parse_args()
-    run(args.fold, args.seed, args.train_fraction, args.limit, args.model, args.features)
+    run(args.fold, args.seed, args.train_fraction, args.limit, args.model, args.features, args.denoise)

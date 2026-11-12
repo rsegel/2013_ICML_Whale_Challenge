@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from whale.data.preprocess import centre_pad, clean_clip
-from whale.features.perch_input import PerchInputConfig, make_perch_input
+from whale.features.perch_input import PerchInputConfig, denoise_clip, make_perch_input
 from whale.data.manifest import parse_filename
 
 
@@ -56,3 +56,31 @@ def test_perch_input_shape_and_peak(speed, pad):
     if pad == "zero":  # audio occupies 2/speed seconds in the middle
         active = np.flatnonzero(out)
         assert active[-1] - active[0] < 32_000 * 2 / speed
+
+
+@pytest.mark.parametrize("method", ["whiten", "subtract"])
+def test_denoise_removes_steady_tone_and_keeps_sweep(method):
+    """A constant 60 Hz tone (like the tonal noise bands) is suppressed relative
+    to a short 100->200 Hz sweep (like an upcall)."""
+    t = np.arange(4000) / 2000
+    tone = 5 * np.sin(2 * np.pi * 60 * t)
+    burst = (t > 0.6) & (t < 1.4)
+    sweep = np.where(burst, np.sin(2 * np.pi * (100 * (t - 0.6) + 62.5 * (t - 0.6) ** 2)), 0.0)
+    out = denoise_clip(tone + sweep, method)
+    assert out.shape == t.shape
+
+    def band_power(x, f_lo, f_hi):
+        spectrum = np.abs(np.fft.rfft(x)) ** 2
+        f = np.fft.rfftfreq(len(x), 1 / 2000)
+        return spectrum[(f >= f_lo) & (f < f_hi)].sum()
+
+    before = band_power(tone + sweep, 55, 65) / band_power(tone + sweep, 110, 190)
+    after = band_power(out, 55, 65) / band_power(out, 110, 190)
+    assert after < before / 10
+
+
+def test_denoise_none_is_identity_and_names_unchanged():
+    clip = np.random.default_rng(0).normal(size=1000)
+    assert denoise_clip(clip, "none") is clip
+    assert PerchInputConfig(4, "zero").name == "speed4_zero_peak0.25"
+    assert PerchInputConfig(4, "zero", denoise="whiten").name == "speed4_zero_peak0.25_whiten"

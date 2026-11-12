@@ -9,8 +9,8 @@
     "val_ap_enriched": 0.7849458847972958,
     "val_auc_full_length_only": 0.8657589769143188,
     "auc_gap_to_best_ci95": [
-      0.0927,
-      0.1298
+      0.0991,
+      0.1375
     ]
   },
   {
@@ -23,8 +23,8 @@
     "val_ap_enriched": 0.9497819755618584,
     "val_auc_full_length_only": 0.9785762206070256,
     "auc_gap_to_best_ci95": [
-      -0.0011,
-      0.0017
+      0.0025,
+      0.0134
     ]
   },
   {
@@ -37,8 +37,8 @@
     "val_ap_enriched": 0.927159926280099,
     "val_auc_full_length_only": 0.9724352568153284,
     "auc_gap_to_best_ci95": [
-      -0.0013,
-      0.0104
+      0.0071,
+      0.0177
     ]
   },
   {
@@ -51,8 +51,8 @@
     "val_ap_enriched": 0.9129259612696868,
     "val_auc_full_length_only": 0.9585721563245524,
     "auc_gap_to_best_ci95": [
-      0.0111,
-      0.0271
+      0.0182,
+      0.0355
     ]
   },
   {
@@ -65,8 +65,8 @@
     "val_ap_enriched": 0.9114377563671291,
     "val_auc_full_length_only": 0.950891775952253,
     "auc_gap_to_best_ci95": [
-      0.0199,
-      0.0359
+      0.0258,
+      0.0449
     ]
   },
   {
@@ -79,8 +79,8 @@
     "val_ap_enriched": 0.9379757797140849,
     "val_auc_full_length_only": 0.9715528064427229,
     "auc_gap_to_best_ci95": [
-      -0.0012,
-      0.0132
+      0.0069,
+      0.0198
     ]
   },
   {
@@ -93,8 +93,8 @@
     "val_ap_enriched": 0.7431518561461532,
     "val_auc_full_length_only": 0.8378713181358861,
     "auc_gap_to_best_ci95": [
-      0.1122,
-      0.1549
+      0.1189,
+      0.1638
     ]
   },
   {
@@ -107,8 +107,36 @@
     "val_ap_enriched": 0.9513331777912456,
     "val_auc_full_length_only": 0.9787140164853977,
     "auc_gap_to_best_ci95": [
+      0.0021,
+      0.0133
+    ]
+  },
+  {
+    "variant": "speed4_zero_peak0.25_whiten",
+    "speed": 4,
+    "pad": "zero",
+    "peak": 0.25,
+    "C": 0.01,
+    "val_auc": 0.9845119047619048,
+    "val_ap_enriched": 0.9594514787121048,
+    "val_auc_full_length_only": 0.9858112001603443,
+    "auc_gap_to_best_ci95": [
       0.0,
       0.0
+    ]
+  },
+  {
+    "variant": "speed4_zero_peak0.25_subtract",
+    "speed": 4,
+    "pad": "zero",
+    "peak": 0.25,
+    "C": 0.01,
+    "val_auc": 0.9781535714285714,
+    "val_ap_enriched": 0.9461242073257342,
+    "val_auc_full_length_only": 0.9790786884059384,
+    "auc_gap_to_best_ci95": [
+      0.0024,
+      0.0107
     ]
   }
 ]
