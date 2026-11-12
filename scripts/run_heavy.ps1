@@ -1,5 +1,6 @@
 <#
-Runs the long CPU training jobs one after another, outside any editor or agent session.
+Runs every ResNet training job one after another (Windows; uses a GPU when one is
+available, the CPU otherwise).
 
     powershell -ExecutionPolicy Bypass -File scripts\run_heavy.ps1            # everything
     powershell -ExecutionPolicy Bypass -File scripts\run_heavy.ps1 -CvOnly    # only the cross-validation folds
@@ -20,11 +21,12 @@ $cache = if ($env:WHALE_CACHE_DIR) { $env:WHALE_CACHE_DIR } else { "$HOME\dv_cac
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUNBUFFERED = "1"
 # Priority is left at normal; headroom for other work comes from using fewer
-# threads. If training is far slower than expected, check the machine's power
-# mode before anything else (see the README).
+# threads. On a laptop, a power-saving mode can slow CPU training several-fold.
 
 # name = the predictions file the job writes; args = what to pass to whale.train
 $jobs = @(
+    @{ name = "resnet18_finetune_fold0_seed0"; args = "--config configs/baseline.yaml --fold 0" },
+    @{ name = "resnet18_finetune_fold1_seed0"; args = "--config configs/baseline.yaml --fold 1" },
     @{ name = "resnet18_finetune_fold2_seed0"; args = "--config configs/baseline.yaml --fold 2" },
     @{ name = "resnet18_finetune_fold3_seed0"; args = "--config configs/baseline.yaml --fold 3" }
 )
