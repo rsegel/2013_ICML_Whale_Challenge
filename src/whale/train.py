@@ -4,6 +4,10 @@ Trains on the fold's training days, picks the epoch with the best validation
 average precision, then writes that model's scores for the validation and test
 days. The test day is only scored, never used for any decision.
 
+The full training state is saved after every epoch, so a run that is killed
+(reboot, power loss) continues from its last finished epoch when the same
+command is run again, in the same W&B run.
+
 Usage::
 
     python -m whale.train --config configs/baseline.yaml --fold 0
@@ -76,11 +80,29 @@ def subsample_training_rows(manifest: pd.DataFrame, rows: np.ndarray, fraction: 
     return np.sort(np.concatenate(keep))
 
 
-def run(config: dict, fold: int, limit: int | None = None) -> Path:
+def save_resume_state(file: Path, state: dict) -> None:
+    """Write to a temporary file first, so a kill mid-write cannot corrupt the state."""
+    temporary = file.with_suffix(".tmp")
+    torch.save(state, temporary)
+    temporary.replace(file)
+
+
+def run(config: dict, fold: int, limit: int | None = None, resume: bool = True) -> Path:
     seed = config["seed"]
     torch.manual_seed(seed)
     np.random.seed(seed)
     torch.set_num_threads(config["threads"])
+
+    run_name = f"{config['name']}_fold{fold}_seed{seed}"
+    if config["data"]["train_fraction"] < 1:
+        run_name += f"_frac{config['data']['train_fraction']:g}"
+    if limit:  # keep smoke tests away from the real run's files
+        run_name += f"_limit{limit}"
+    checkpoint =paths.CACHE_DIR / "checkpoints" / f"{run_name}.pt"  # best model's weights
+    resume_file = checkpoint.with_suffix(".resume.pt")  # full state after the last finished epoch
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    state = torch.load(resume_file, weights_only=False) if resume and resume_file.exists() else None
+    start_epoch = state["epoch"] if state else 0
 
     manifest = load_labelled(fold)
     waveforms = np.load(paths.waveform_path("train"))  # 383 MB, held in memory
@@ -90,9 +112,10 @@ def run(config: dict, fold: int, limit: int | None = None) -> Path:
         rows = {split: r[:limit] for split, r in rows.items()}
 
     batch_size = config["data"]["batch_size"]
-    train_set = ClipDataset(manifest, waveforms, rows["train"], config["data"]["max_shift"], seed)
+    # A resumed run draws new shuffles and shifts rather than replaying the first epochs'.
+    train_set = ClipDataset(manifest, waveforms, rows["train"], config["data"]["max_shift"], seed + start_epoch)
     train_loader = DataLoader(train_set, batch_size, shuffle=True, drop_last=True,
-                              generator=torch.Generator().manual_seed(seed))
+                              generator=torch.Generator().manual_seed(seed + start_epoch))
     eval_loaders = {split: DataLoader(ClipDataset(manifest, waveforms, rows[split]), 256)
                     for split in ("val", "test")}
 
@@ -106,20 +129,26 @@ def run(config: dict, fold: int, limit: int | None = None) -> Path:
         optimizer, lambda s: warmup_cosine(s, optim_cfg["warmup_epochs"] * steps_per_epoch, total_steps))
     loss_fn = nn.BCEWithLogitsLoss()
 
-    run_name = f"{config['name']}_fold{fold}_seed{seed}"
-    if config["data"]["train_fraction"] < 1:
-        run_name += f"_frac{config['data']['train_fraction']:g}"
+    best_ap, best_epoch, step, elapsed_before = -1.0, -1, 0, 0.0
+    if state:
+        model.load_state_dict(state["model"])
+        optimizer.load_state_dict(state["optimizer"])
+        scheduler.load_state_dict(state["scheduler"])
+        best_ap, best_epoch, step = state["best_ap"], state["best_epoch"], state["step"]
+        elapsed_before = state["elapsed_seconds"]
+        print(f"resuming {run_name} after epoch {start_epoch} (best so far: epoch {best_epoch})", flush=True)
+
     wandb.init(project=PROJECT, name=run_name, group=config["name"], job_type="train", mode=wandb_mode(),
+               id=state["wandb_id"] if state else None, resume="allow" if state else None,
                config={**config, "fold": fold, "fold_days": FOLDS[fold],
                        "n_train": len(rows["train"]), "n_val": len(rows["val"]),
                        "trainable_parameters": sum(p.numel() for p in trainable),
                        "total_parameters": sum(p.numel() for p in model.parameters())})
 
-    checkpoint = paths.CACHE_DIR / "checkpoints" / f"{run_name}.pt"
-    checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    best_ap, best_epoch, step, started = -1.0, -1, 0, time.perf_counter()
+    wandb_id = wandb.run.id
+    started = time.perf_counter() - elapsed_before
 
-    for epoch in range(optim_cfg["epochs"]):
+    for epoch in range(start_epoch, optim_cfg["epochs"]):
         model.train()
         running, seen = 0.0, 0
         for waveform, label, _ in train_loader:
@@ -150,6 +179,11 @@ def run(config: dict, fold: int, limit: int | None = None) -> Path:
         elif epoch + 1 - best_epoch >= optim_cfg["patience"]:
             print(f"early stop: no improvement since epoch {best_epoch}")
             break
+        save_resume_state(resume_file, {
+            "epoch": epoch + 1, "step": step, "best_ap": best_ap, "best_epoch": best_epoch,
+            "elapsed_seconds": time.perf_counter() - started, "wandb_id": wandb_id,
+            "model": model.state_dict(), "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict()})
 
     model.load_state_dict(torch.load(checkpoint))
     frames = []
@@ -167,6 +201,7 @@ def run(config: dict, fold: int, limit: int | None = None) -> Path:
     wandb.summary.update({"best_epoch": best_epoch, "best_val_average_precision": best_ap,
                           "train_minutes": (time.perf_counter() - started) / 60})
     wandb.finish()
+    resume_file.unlink(missing_ok=True)
     print("predictions ->", out)
     return out
 
@@ -179,6 +214,8 @@ if __name__ == "__main__":
     parser.add_argument("--train-fraction", type=float)
     parser.add_argument("--epochs", type=int)
     parser.add_argument("--limit", type=int, help="use only the first N clips of each split (smoke test)")
+    parser.add_argument("--threads", type=int, help="CPU threads (default: from the config)")
+    parser.add_argument("--no-resume", action="store_true", help="ignore saved state and start from epoch 1")
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
@@ -188,4 +225,6 @@ if __name__ == "__main__":
         cfg["data"]["train_fraction"] = args.train_fraction
     if args.epochs is not None:
         cfg["optim"]["epochs"] = args.epochs
-    run(cfg, args.fold, args.limit)
+    if args.threads is not None:
+        cfg["threads"] = args.threads
+    run(cfg, args.fold, args.limit, resume=not args.no_resume)
