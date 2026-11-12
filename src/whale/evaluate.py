@@ -16,8 +16,8 @@ numbers are optimistic (thresholds and model selection used the same day).
 
 Usage::
 
-    python -m whale.evaluate                  # test days
-    python -m whale.evaluate --split val
+    python -m whale.evaluate                  # validation days (default)
+    python -m whale.evaluate --split test     # held-out test days: run once, at the very end
 """
 
 import argparse
@@ -41,9 +41,16 @@ RECALL_TARGETS = (0.90, 0.95)
 COLOURS = ("#2a78d6", "#d9622b", "#3a9d6e", "#8a5fbf")
 
 
-def load_predictions(models: list[str] | None = None) -> pd.DataFrame:
-    """All full-data runs, one row per (model, fold, clip), with manifest columns."""
-    frames = [pd.read_parquet(f) for f in sorted(PREDICTIONS.glob("*.parquet"))]
+def load_predictions(models: list[str] | None = None, folders: list[str] | None = None) -> pd.DataFrame:
+    """All full-data runs, one row per (model, fold, clip), with manifest columns.
+
+    ``folders`` are read in order (relative to the predictions directory); when
+    two hold the same run, the later folder wins.
+    """
+    files = {}
+    for folder in folders or ["."]:
+        files |= {f.name: f for f in sorted((PREDICTIONS / folder).glob("*.parquet"))}
+    frames = [pd.read_parquet(f) for f in files.values()]
     pred = pd.concat(frames, ignore_index=True)
     pred = pred[pred["train_fraction"] == 1.0]
     if models:
@@ -233,8 +240,9 @@ def plot_folds(table: pd.DataFrame, intervals: dict, split: str, file) -> None:
     plt.close(fig)
 
 
-def main(split: str, n_boot: int, models: list[str] | None, log_wandb: bool) -> None:
-    pred = load_predictions(models)
+def main(split: str, n_boot: int, models: list[str] | None, log_wandb: bool,
+         folders: list[str] | None = None) -> None:
+    pred = load_predictions(models, folders)
     folds = common_folds(pred)
     missing = sorted(set(FOLDS) - set(folds))
     if missing:
@@ -298,9 +306,12 @@ def main(split: str, n_boot: int, models: list[str] | None, log_wandb: bool) -> 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--split", choices=["test", "val"], default="test")
+    parser.add_argument("--split", choices=["val", "test"], default="val",
+                        help="test is opt-in: read the test days only once, when everything else is final")
     parser.add_argument("--n-boot", type=int, default=1000)
     parser.add_argument("--models", nargs="+", help="model names to include (default: all full-data runs)")
     parser.add_argument("--wandb", action="store_true", help="also log the tables and figure to W&B")
+    parser.add_argument("--folders", nargs="+", help="sub-folders of the predictions directory, later ones win "
+                        "(default: the directory itself)")
     args = parser.parse_args()
-    main(args.split, args.n_boot, args.models, args.wandb)
+    main(args.split, args.n_boot, args.models, args.wandb, args.folders)
