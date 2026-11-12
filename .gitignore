@@ -9,3 +9,6 @@ wandb/
 *.onnx
 .env
 reports/listen/
+# development-only evaluation output (validation days)
+reports/*_val.*
+reports/figures/*_val*.png
