@@ -1,0 +1,25 @@
+{
+  "clips_per_day": 3000,
+  "days": [
+    "20090328",
+    "20090329"
+  ],
+  "Perch embedding (1,536 numbers)": {
+    "day_accuracy": 0.7765,
+    "day_chance": 0.5,
+    "upcall_balanced_accuracy": 0.9027970117897225,
+    "variance_in_first_2_components": 0.19261762499809265,
+    "variance_in_first_50_components": 0.7796157002449036,
+    "correlation_of_clip_length_with_first_component": 0.05241195180612043,
+    "correlation_within_short_clips": -0.060459760839646465
+  },
+  "Log spectrogram (29,618 numbers)": {
+    "day_accuracy": 0.5988333333333333,
+    "day_chance": 0.5,
+    "upcall_balanced_accuracy": 0.8694192824568368,
+    "variance_in_first_2_components": 0.15886646509170532,
+    "variance_in_first_50_components": 0.29975247383117676,
+    "correlation_of_clip_length_with_first_component": -0.8840431709058556,
+    "correlation_within_short_clips": -0.8842490445385863
+  }
+}
