@@ -41,6 +41,11 @@ VARIANTS = [
     # waveform-domain versions of the CNN's per-frequency median subtraction
     PerchInputConfig(4, "zero", denoise="whiten"),
     PerchInputConfig(4, "zero", denoise="subtract"),
+    # complete the speed x padding grid
+    PerchInputConfig(2, "tile"),
+    PerchInputConfig(8, "tile"),
+    PerchInputConfig(16, "tile"),
+    PerchInputConfig(16, "tile", denoise="whiten"),
 ]
 SUBSET = {"train": (1000, 2000), "val": (600, 1400)}  # (positives, negatives)
 C_GRID = (0.001, 0.01, 0.1)
