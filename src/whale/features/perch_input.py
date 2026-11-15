@@ -72,6 +72,9 @@ def denoise_clip(clip: np.ndarray, method: str) -> np.ndarray:
         return clip
     if method not in VALID_DENOISE:
         raise ValueError(f"denoise must be one of {VALID_DENOISE}")
+    n = len(clip)
+    if n < STFT_WINDOW:  # two Kaggle clips (42 and 248 samples); no labelled clip is under 539
+        clip = np.pad(clip, (0, STFT_WINDOW - n))
     freqs, _, spec = stft(clip, fs=SOURCE_SAMPLE_RATE, window="hann", nperseg=STFT_WINDOW,
                           noverlap=STFT_WINDOW - STFT_HOP, nfft=STFT_NFFT)
     magnitude = np.abs(spec)
@@ -84,7 +87,7 @@ def denoise_clip(clip: np.ndarray, method: str) -> np.ndarray:
         gain = np.sqrt(np.maximum(1.0 - noise / (power + 1e-12), SUBTRACT_FLOOR))
     _, out = istft(spec * gain, fs=SOURCE_SAMPLE_RATE, window="hann", nperseg=STFT_WINDOW,
                    noverlap=STFT_WINDOW - STFT_HOP, nfft=STFT_NFFT)
-    return out[: len(clip)]
+    return out[:n]
 
 
 def make_perch_input(clip: np.ndarray, config: PerchInputConfig = PerchInputConfig()) -> np.ndarray:

@@ -84,3 +84,14 @@ def test_denoise_none_is_identity_and_names_unchanged():
     assert denoise_clip(clip, "none") is clip
     assert PerchInputConfig(4, "zero").name == "speed4_zero_peak0.25"
     assert PerchInputConfig(4, "zero", denoise="whiten").name == "speed4_zero_peak0.25_whiten"
+
+
+@pytest.mark.parametrize("method", ["whiten", "subtract"])
+@pytest.mark.parametrize("n_samples", [42, 248])
+def test_denoise_handles_clips_shorter_than_the_stft_window(method, n_samples):
+    """Two Kaggle clips are shorter than the 256-sample window (42 and 248 samples)."""
+    clip = np.random.default_rng(0).normal(size=n_samples)
+    out = denoise_clip(clip, method)
+    assert out.shape == clip.shape and np.isfinite(out).all()
+    perch_input = make_perch_input(clip, PerchInputConfig(4, "zero", denoise=method))
+    assert perch_input.shape == (160_000,) and np.isfinite(perch_input).all()

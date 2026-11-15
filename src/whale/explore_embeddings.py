@@ -23,6 +23,8 @@ Usage::
 
 import json
 
+import joblib
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -49,6 +51,10 @@ N_COMPONENTS = 50  # PCA dimensions fed to UMAP and to the linear classifiers
 INPUT = PerchInputConfig(speed=4, pad="zero")
 FIGURES = {kind: paths.REPO_ROOT / "reports" / "figures" / f"embedding_structure_{kind}.png" for kind in ("pca", "umap")}
 RESULTS = paths.REPO_ROOT / "reports" / "embedding_structure.json"
+# The fitted scaler / PCA / UMAP of each representation, so later figures project into the very same maps.
+# UMAP is not reproducible across sessions even with a fixed seed (15 Nov: same data, code and seed gave a
+# different layout than on 12 Nov), so refitting elsewhere is not an option.
+FITTED_MAPS = paths.CACHE_DIR / "embedding_maps_fold0.joblib"
 
 # Okabe-Ito colour-blind-safe palette: labelled days first, Kaggle days after.
 DAY_COLOURS = ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#56B4E9", "#D55E00", "#000000"]
@@ -121,13 +127,16 @@ def main() -> None:
     by_length = (sample["n_samples"] / paths.SAMPLE_RATE).to_numpy(dtype=float)
     colourings = [(by_day, "by day"), (by_label, "by label"), (by_length, "by clip length")]
 
-    results, points = {}, {"pca": {}, "umap": {}}
+    results, points, fitted = {}, {"pca": {}, "umap": {}}, {}
     for name, values in representations.items():
-        standardised = StandardScaler().fit_transform(values)
+        scaler = StandardScaler().fit(values)
+        standardised = scaler.transform(values)
         pca = PCA(N_COMPONENTS, random_state=SEED).fit(standardised)
         components = pca.transform(standardised)
+        mapper = umap.UMAP(n_neighbors=30, min_dist=0.3, random_state=SEED).fit(components)
         points["pca"][name] = components[:, :2]
-        points["umap"][name] = umap.UMAP(n_neighbors=30, min_dist=0.3, random_state=SEED).fit_transform(components)
+        points["umap"][name] = mapper.embedding_
+        fitted[name] = {"scaler": scaler, "pca": pca, "umap": mapper}
         short = by_length < 2
         results[name] = {**linear_separability(components, sample),
                          "variance_in_first_2_components": float(pca.explained_variance_ratio_[:2].sum()),
@@ -161,7 +170,8 @@ def main() -> None:
         fig.savefig(FIGURES[kind], dpi=130)
         plt.close(fig)
     RESULTS.write_text(json.dumps({"clips_per_day": PER_DAY, "days": days, **results}, indent=2))
-    print("wrote", *FIGURES.values(), "and", RESULTS)
+    joblib.dump({"rows": sample["row"].to_numpy(), "maps": fitted}, FITTED_MAPS)
+    print("wrote", *FIGURES.values(), RESULTS, "and", FITTED_MAPS)
 
 
 if __name__ == "__main__":
