@@ -10,7 +10,8 @@ data, compared on the same day-based cross-validation folds:
    controls).
 
 The write-up (preprocessing, training, metrics, comparison) is in the
-[W&B report](REPORT_LINK_TODO).
+[W&B report](https://forge.coreweave.com/wandb/roisegel-personal/whale-upcall/reports/2013-ICML-Whale-Challenge-DeepVoice-Assignment-Nov-2026--VmlldzoxODMxMTY2Nw?accessToken=ni2v94gh18bf15umx4a7wvwvh5xw4vpxf68ythj4549iauy3jdgz3w94tiu1vv6w)
+(hosted on CoreWeave Forge; the page can take up to a minute to load).
 
 ## Data
 
