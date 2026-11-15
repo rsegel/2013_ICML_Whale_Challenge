@@ -1,0 +1,50 @@
+{
+  "0": {
+    "false alarm": {
+      "all models wrong": 172,
+      "only perch_logreg_whiten wrong": 166,
+      "only resnet18_finetune wrong": 69
+    },
+    "missed call": {
+      "all models wrong": 58,
+      "only perch_logreg_whiten wrong": 68,
+      "only resnet18_finetune wrong": 73
+    }
+  },
+  "1": {
+    "false alarm": {
+      "all models wrong": 22,
+      "only perch_logreg_whiten wrong": 20,
+      "only resnet18_finetune wrong": 20
+    },
+    "missed call": {
+      "all models wrong": 80,
+      "only perch_logreg_whiten wrong": 57,
+      "only resnet18_finetune wrong": 48
+    }
+  },
+  "2": {
+    "false alarm": {
+      "all models wrong": 346,
+      "only perch_logreg_whiten wrong": 253,
+      "only resnet18_finetune wrong": 124
+    },
+    "missed call": {
+      "all models wrong": 52,
+      "only perch_logreg_whiten wrong": 64,
+      "only resnet18_finetune wrong": 33
+    }
+  },
+  "3": {
+    "false alarm": {
+      "all models wrong": 139,
+      "only perch_logreg_whiten wrong": 142,
+      "only resnet18_finetune wrong": 26
+    },
+    "missed call": {
+      "all models wrong": 88,
+      "only perch_logreg_whiten wrong": 51,
+      "only resnet18_finetune wrong": 109
+    }
+  }
+}

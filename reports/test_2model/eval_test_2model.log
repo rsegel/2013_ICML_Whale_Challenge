@@ -1,0 +1,43 @@
+
+=== per test day ===
+              model      day  clips  positives  roc_auc  average_precision  brier  recall_at_90  fp_per_1000_at_90  recall_at_95  fp_per_1000_at_95  recall_at_1pct_fpr
+perch_logreg_whiten 20090331  14054       1745   0.9908             0.9433 0.0232        0.9278            24.0501        0.9736            47.2463              0.7696
+perch_logreg_whiten 20090328   8398        655   0.9903             0.9341 0.0182        0.7908             5.0012        0.8794            10.0024              0.8687
+perch_logreg_whiten 20090329  14294       1611   0.9786             0.8951 0.0284        0.9280            41.9057        0.9516            67.6508              0.6946
+perch_logreg_whiten 20090330  11095       1265   0.9860             0.9042 0.0280        0.8901            25.3267        0.9621            57.5034              0.6719
+  resnet18_finetune 20090331  14054       1745   0.9943             0.9608 0.0202        0.9249            17.1481        0.9639            26.4693              0.8504
+  resnet18_finetune 20090328   8398        655   0.9953             0.9543 0.0149        0.8046             5.0012        0.8931             8.0972              0.9069
+  resnet18_finetune 20090329  14294       1611   0.9894             0.9184 0.0258        0.9472            32.8809        0.9652            44.7041              0.7318
+  resnet18_finetune 20090330  11095       1265   0.9906             0.9204 0.0241        0.8443            14.8716        0.9273            24.2452              0.7162
+
+=== mean over folds, with 95% chunk-bootstrap interval ===
+perch_logreg_whiten
+  roc_auc              0.9864  [0.9838, 0.9888]   per fold: 0.9908, 0.9903, 0.9786, 0.9860
+  average_precision    0.9192  [0.9082, 0.9290]   per fold: 0.9433, 0.9341, 0.8951, 0.9042
+  brier                0.0245  [0.0223, 0.0268]   per fold: 0.0232, 0.0182, 0.0284, 0.0280
+  recall_at_90         0.8842  [0.8713, 0.8968]   per fold: 0.9278, 0.7908, 0.9280, 0.8901
+  fp_per_1000_at_90    24.0709  [21.8517, 26.3421]   per fold: 24.0501, 5.0012, 41.9057, 25.3267
+  full-length clips only: roc_auc 0.9868  average_precision 0.9247
+resnet18_finetune
+  roc_auc              0.9924  [0.9915, 0.9933]   per fold: 0.9943, 0.9953, 0.9894, 0.9906
+  average_precision    0.9385  [0.9297, 0.9463]   per fold: 0.9608, 0.9543, 0.9184, 0.9204
+  brier                0.0212  [0.0193, 0.0232]   per fold: 0.0202, 0.0149, 0.0258, 0.0241
+  recall_at_90         0.8803  [0.8659, 0.8932]   per fold: 0.9249, 0.8046, 0.9472, 0.8443
+  fp_per_1000_at_90    17.4755  [15.7358, 19.3384]   per fold: 17.1481, 5.0012, 32.8809, 14.8716
+  full-length clips only: roc_auc 0.9928  average_precision 0.9436
+
+=== paired differences (95% interval; excludes 0 = distinguishable) ===
+perch_logreg_whiten - resnet18_finetune
+  roc_auc              [-0.0083, -0.0040]
+  average_precision    [-0.0255, -0.0137]
+  brier                [+0.0022, +0.0043]
+  recall_at_90         [-0.0064, +0.0147]
+  fp_per_1000_at_90    [+5.3781, +7.8451]
+
+=== errors at each model's 90%-recall threshold ===
+             all models wrong  only perch_logreg_whiten wrong  only resnet18_finetune wrong
+kind                                                                                       
+false alarm               679                             581                           239
+missed call               278                             240                           263
+
+wrote C:\Users\roise\OneDrive\Desktop\Jobs etc\DeepVoice\whale-upcall\reports\evaluation_test.json, worst_errors_test.csv, C:\Users\roise\OneDrive\Desktop\Jobs etc\DeepVoice\whale-upcall\reports\figures\evaluation_test.png and C:\Users\roise\OneDrive\Desktop\Jobs etc\DeepVoice\whale-upcall\reports\figures\evaluation_test_folds.png

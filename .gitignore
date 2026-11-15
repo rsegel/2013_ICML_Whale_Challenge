@@ -12,3 +12,6 @@ reports/listen/
 # development-only evaluation output (validation days)
 reports/*_val.*
 reports/figures/*_val*.png
+# local dumps written by scripts/report/*.py dry runs
+*_blocks.txt
+*_blocks_spec.json

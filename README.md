@@ -5,10 +5,12 @@ Two detectors for North Atlantic right whale upcalls on the Kaggle
 data, compared on the same day-based cross-validation folds:
 
 1. **Baseline**: log spectrogram + ImageNet ResNet-18, fine-tuned end to end.
-2. **Foundation model**: frozen Perch v2 (ONNX) embeddings + a small probe
-   (logistic regression; a kNN and a one-hidden-layer network as controls).
+2. **Foundation model**: frozen Perch v2 (ONNX) embeddings of a whitened, sped-up
+   clip + a logistic-regression probe (a kNN and a one-hidden-layer network as
+   controls).
 
-The write-up (preprocessing, training, metrics, comparison) is in the W&B report.
+The write-up (preprocessing, training, metrics, comparison) is in the
+[W&B report](REPORT_LINK_TODO).
 
 ## Data
 
@@ -65,23 +67,35 @@ folds; each fold trains on two days, validates on one and tests on one:
   (`reports/perch_input_selection.json`). Restricting the pooling to the time
   frames that hold the clip was tested and gave no gain, so Perch's own pooled
   embedding is used.
+- **Whitening the Perch input** (`--denoise whiten`): a waveform version of the
+  ResNet's per-frequency background removal, applied before Perch. It raised
+  mean validation AP from 0.895 to 0.919 (per fold +0.006 / +0.009 / +0.046 /
+  +0.034) and is the final Perch model.
 
-## Results so far (validation days)
+## Results (test days)
 
-Average precision on each fold's validation day. These days also chose the
-epoch or regularisation strength, so the numbers are slightly optimistic;
-test-day results are in the report.
+Each fold's model and decision threshold were frozen on its validation day; the
+test day was scored once, at the end. Mean over the four test days with a 95%
+chunk-bootstrap interval (`reports/test_2model/evaluation_test.json`).
 
-| Model | Fold 0 | Fold 1 | Fold 2 | Fold 3 | Mean |
+| Average precision | 31 Mar | 28 Mar | 29 Mar | 30 Mar | Mean [95% interval] |
 |---|---|---|---|---|---|
-| ResNet-18, fine-tuned | 0.927 | 0.954 | 0.956 | 0.934 | 0.943 |
-| Perch + logistic probe | 0.894 | 0.937 | 0.889 | 0.860 | 0.895 |
-| Perch + kNN | 0.831 | 0.913 | 0.843 | 0.816 | 0.851 |
+| ResNet-18, fine-tuned | 0.961 | 0.954 | 0.918 | 0.920 | 0.938 [0.930, 0.946] |
+| Perch + whitening + logistic probe | 0.943 | 0.934 | 0.895 | 0.904 | 0.919 [0.908, 0.929] |
+
+| False alarms per 1,000 clips at the validation day's 90%-recall threshold | 31 Mar | 28 Mar | 29 Mar | 30 Mar | Mean [95% interval] |
+|---|---|---|---|---|---|
+| ResNet-18, fine-tuned | 17.1 | 5.0 | 32.9 | 14.9 | 17.5 [15.7, 19.3] |
+| Perch + whitening + logistic probe | 24.1 | 5.0 | 41.9 | 25.3 | 24.1 [21.9, 26.3] |
+
+The ResNet is ahead on every test day (paired AP difference [+0.014, +0.026]).
+With few labels the order flips: on fold 0, trained on 1% of the clips (227),
+whitened Perch is ahead on all five subsamples (mean test AP 0.893 vs 0.836).
 
 | | ResNet-18 fine-tune | Perch v2 + logistic probe |
 |---|---|---|
 | Trained parameters | 11.2 M (all) | 1,537 (101.8 M frozen) |
-| Training per fold | about 1.5 h on a laptop CPU; minutes on a GPU | under 1 minute on cached embeddings |
+| Training per fold | 86-100 min on a laptop CPU; minutes on a GPU | under 1 minute on cached embeddings |
 | Inference, laptop CPU | about 10 ms per clip | about 190 ms per clip |
 
 ## Layout
@@ -107,13 +121,21 @@ src/whale/
   train.py                 ResNet training loop, resumable, W&B logging
   probe.py                 logistic-regression or kNN probe on embeddings
   probe_mlp.py             one-hidden-layer probe, with training curves
-  explore_embeddings.py    PCA and UMAP of embeddings vs spectrograms
+  explore_embeddings.py    PCA and UMAP of embeddings vs spectrograms (saves the fit)
   analyse_errors.py        operating points and error gallery (validation days)
   evaluate.py              held-out metrics, confidence intervals, figures
   metrics.py               ranking metrics and operating points
+  figure_label_efficiency.py         AP vs number of training clips (1%, 10%, 100%)
+  figure_test_error_spectrograms.py  mean spectrogram of each model's test-day mistakes
+  figure_test_error_maps.py          test-day mistakes projected onto the saved PCA/UMAP
+  report_figures.py        data-exploration figures used in the report
+  predict.py               score the unlabelled Kaggle clips (fold models averaged)
 configs/                   ResNet configs (fine-tuned, frozen backbone)
 scripts/run_heavy.ps1      every ResNet run in sequence, skip-and-resume
-reports/                   audit figures and selection results
+scripts/check_umap_repro.py  check that the UMAP maps reproduce (they do not across sessions)
+scripts/report/            W&B report tooling: pull a report, build an edited draft, log figures
+reports/                   result tables and figures (test_2model/: the reported comparison)
+submissions/               Kaggle-format predictions
 tests/                     pytest suite
 ```
 
@@ -136,7 +158,9 @@ uv run python -m whale.data.audit             # data checks and figures
 # foundation model
 uv run python -m whale.select_perch_input     # Perch input-variant selection
 uv run python -m whale.embed train --speed 4 --pad zero
+uv run python -m whale.embed train --speed 4 --pad zero --denoise whiten
 uv run python -m whale.probe --fold 0         # repeat for folds 0-3
+uv run python -m whale.probe --fold 0 --denoise whiten   # the final Perch model
 uv run python -m whale.probe --fold 0 --model knn
 uv run python -m whale.probe_mlp --fold 0
 
@@ -146,7 +170,19 @@ uv run python -m whale.train --config configs/baseline.yaml --fold 0   # folds 0
 # comparison
 uv run python -m whale.evaluate               # validation days
 uv run python -m whale.analyse_errors
-uv run python -m whale.evaluate --split test  # test days, once, at the end
+uv run python -m whale.evaluate --split test --models resnet18_finetune perch_logreg_whiten
+                                              # test days, once, at the end
+
+# analysis figures (fold 0)
+uv run python -m whale.explore_embeddings     # training days only; saves the map fit
+uv run python -m whale.figure_test_error_spectrograms
+uv run python -m whale.figure_test_error_maps
+uv run python -m whale.figure_label_efficiency --split test --two-model
+
+# Kaggle clips
+uv run python -m whale.embed test --speed 4 --pad zero --denoise whiten
+uv run python -m whale.predict perch
+uv run python -m whale.predict resnet --checkpoints <folder with the four fold checkpoints>
 ```
 
 Training runs resume from their last finished epoch when the same command is
